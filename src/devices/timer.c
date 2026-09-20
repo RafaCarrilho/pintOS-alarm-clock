@@ -93,11 +93,21 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
 
-  ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+  ASSERT (intr_get_level () == INTR_ON); // interrupções chegam ativas
+ if (ticks<=0) return; // garanto que o tick que vamos colocar não é igual ou menor que zero
+  
+  enum intr_level itr_anterior = intr_disable(); //mas eu preciso desligar pq se puder interromper eu posso cancelar essa função no meio e a thread nunca bloqueia direito
+
+  struct thread *atual = thread_current (); 
+  int64_t tick_atual = timer_ticks ();
+ 
+  atual->wake_up_tick = tick_atual + ticks; //Setto o wakeup pra ser chamado no futuro
+  list_insert_ordered (&lista_sleep, &atual->elem, comparador_wakeuptime, NULL); // em que lista? qual "gancho"? que função enviar, e NULL!
+  
+  
+  thread_block();
+  intr_set_level (itr_anterior); // Só depois de block rodar por completo que a gente religa as interrupções
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -175,6 +185,17 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
+  while (!list_empty(&lista_sleep)){
+    struct list_elem *primeiro = list_front (&lista_sleep);
+    struct thread *primeira_thread = list_entry (primeiro, struct thread, elem);
+    if (primeira_thread->wake_up_tick <= ticks){
+      list_pop_front( &lista_sleep);
+      thread_unblock(primeira_thread);
+    } else {
+      break;
+    }
+
+  }
   thread_tick ();
 }
 

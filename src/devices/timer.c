@@ -29,6 +29,9 @@ static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
+static bool comparador_wakeuptime (const struct list_elem* alvo, const struct list_elem* ref_atual, void *aux UNUSED); /* Função que o isert ordered vai usar */
+static struct list lista_sleep; /*Criei a lista das que tão dormindo*/
+
 
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
@@ -37,6 +40,7 @@ timer_init (void)
 {
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
+  list_init (&lista_sleep); /*Mais uma criada por mim, a gente inicia a lista das threads que dormem*/
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -173,6 +177,14 @@ timer_interrupt (struct intr_frame *args UNUSED)
   ticks++;
   thread_tick ();
 }
+
+static bool comparador_wakeuptime (const struct list_elem *alvo, const struct list_elem *ref_atual, void *aux UNUSED){ // Função que vamos enviar no insert_ordenada
+  struct thread *thread_a = list_entry (alvo, struct thread, elem);
+  struct thread *thread_b = list_entry (ref_atual, struct thread, elem);
+
+  return thread_a->wake_up_tick < thread_b->wake_up_tick;
+}
+
 
 /* Returns true if LOOPS iterations waits for more than one timer
    tick, otherwise false. */

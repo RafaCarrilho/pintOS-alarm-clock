@@ -95,12 +95,15 @@ timer_sleep (int64_t ticks)
 {
 
   ASSERT (intr_get_level () == INTR_ON); // interrupções chegam ativas
- if (ticks<=0) return; // garanto que o tick que vamos colocar não é igual ou menor que zero
-  
+  struct thread *atual = thread_current ();
+  int64_t tick_atual = timer_ticks ();
+  if (ticks<=0) return; // garanto que o tick que vamos colocar não é igual ou menor que zero
+ 
+  if (ticks > INT64_MAX - tick_atual) return;
   enum intr_level itr_anterior = intr_disable(); //mas eu preciso desligar pq se puder interromper eu posso cancelar essa função no meio e a thread nunca bloqueia direito
 
-  struct thread *atual = thread_current (); 
-  int64_t tick_atual = timer_ticks ();
+  
+  
  
   atual->wake_up_tick = tick_atual + ticks; //Setto o wakeup pra ser chamado no futuro
   list_insert_ordered (&lista_sleep, &atual->elem, comparador_wakeuptime, NULL); // em que lista? qual "gancho"? que função enviar, e NULL!
